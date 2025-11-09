@@ -16,6 +16,12 @@ import CalendarView from './pages/CalendarView';
 import Analytics from './pages/Analytics';
 import Admin from './pages/Admin';
 
+// NEW IMPORTS - Add these for CRUD functionality
+import CreateEvent from './pages/CreateEvent';
+import CreateResource from './pages/CreateResource';
+import EditEvent from './pages/EditEvent';
+import EditResource from './pages/EditResource';
+
 function App() {
   return (
     <AuthProvider>
@@ -103,6 +109,52 @@ function App() {
               <ProtectedRoute requireAdmin={true}>
                 <Layout>
                   <Admin />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* NEW ADMIN CRUD ROUTES - Add these */}
+          
+          {/* Event CRUD */}
+          <Route
+            path="/admin/events/create"
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <Layout>
+                  <CreateEvent />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/events/edit/:id"
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <Layout>
+                  <EditEvent />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Resource CRUD */}
+          <Route
+            path="/admin/resources/create"
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <Layout>
+                  <CreateResource />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/resources/edit/:id"
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <Layout>
+                  <EditResource />
                 </Layout>
               </ProtectedRoute>
             }
