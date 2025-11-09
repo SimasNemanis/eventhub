@@ -87,16 +87,27 @@ export default function MyBookings() {
                       {booking.status || 'pending'}
                     </span>
                   </p>
-                  {booking.booking_date_start && (
+                  {/* Use date + start_time + end_time instead of booking_date_start/end */}
+                  {booking.date && (
                     <p>
-                      <span className="font-medium">Start:</span>{' '}
-                      {new Date(booking.booking_date_start).toLocaleString()}
+                      <span className="font-medium">Date:</span>{' '}
+                      {new Date(booking.date).toLocaleDateString()}
                     </p>
                   )}
-                  {booking.booking_date_end && (
+                  {booking.start_time && booking.end_time && (
                     <p>
-                      <span className="font-medium">End:</span>{' '}
-                      {new Date(booking.booking_date_end).toLocaleString()}
+                      <span className="font-medium">Time:</span>{' '}
+                      {booking.start_time} - {booking.end_time}
+                    </p>
+                  )}
+                  {booking.booking_type && (
+                    <p>
+                      <span className="font-medium">Type:</span> {booking.booking_type}
+                    </p>
+                  )}
+                  {booking.purpose && (
+                    <p>
+                      <span className="font-medium">Purpose:</span> {booking.purpose}
                     </p>
                   )}
                   {booking.event_id && (
@@ -107,6 +118,11 @@ export default function MyBookings() {
                   {booking.resource_id && (
                     <p>
                       <span className="font-medium">Resource ID:</span> {booking.resource_id.slice(0, 8)}...
+                    </p>
+                  )}
+                  {booking.notes && (
+                    <p>
+                      <span className="font-medium">Notes:</span> {booking.notes}
                     </p>
                   )}
                 </div>
