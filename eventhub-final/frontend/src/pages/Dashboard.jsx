@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [recentEvents, setRecentEvents] = useState([]);
   const [recentBookings, setRecentBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadDashboardData();
@@ -22,22 +23,39 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
+      setLoading(true);
+      setError('');
+      
       const [eventsData, bookingsData, resourcesData] = await Promise.all([
         api.entities.Event.list(),
         api.entities.Booking.list(),
         api.entities.Resource.list()
       ]);
 
+      console.log('Dashboard API responses:', { eventsData, bookingsData, resourcesData });
+
       // Handle response - check if data is wrapped or direct
-      const events = eventsData.data || eventsData || [];
-      const bookings = bookingsData.data || bookingsData || [];
-      const resources = resourcesData.data || resourcesData || [];
+      const events = Array.isArray(eventsData) ? eventsData : (eventsData.data || eventsData.events || []);
+      const bookings = Array.isArray(bookingsData) ? bookingsData : (bookingsData.data || bookingsData.bookings || []);
+      const resources = Array.isArray(resourcesData) ? resourcesData : (resourcesData.data || resourcesData.resources || []);
+
+      console.log('Parsed data:', { 
+        eventsCount: events.length, 
+        bookingsCount: bookings.length, 
+        resourcesCount: resources.length 
+      });
 
       // Get upcoming events (future dates)
-      const upcomingEvents = events.filter(event => new Date(event.start_time) >= new Date());
+      // Events have 'date' and 'start_time' as separate fields
+      const now = new Date();
+      const upcomingEvents = events.filter(event => {
+        if (!event.date) return false;
+        const eventDate = new Date(event.date);
+        return eventDate >= now;
+      });
       
       // Count available resources
-      const availableResources = resources.filter(r => r.available).length;
+      const availableResources = resources.filter(r => r.available !== false).length;
 
       setRecentEvents(upcomingEvents.slice(0, 5));
       setRecentBookings(bookings.slice(0, 5));
@@ -51,12 +69,17 @@ export default function Dashboard() {
 
       // If admin, load user count
       if (user?.role === 'admin') {
-        const usersData = await api.entities.User.list();
-        const users = usersData.data || usersData || [];
-        setStats(prev => ({ ...prev, totalUsers: users.length }));
+        try {
+          const usersData = await api.entities.User.list();
+          const users = Array.isArray(usersData) ? usersData : (usersData.data || usersData.users || []);
+          setStats(prev => ({ ...prev, totalUsers: users.length }));
+        } catch (err) {
+          console.error('Error loading users:', err);
+        }
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      setError('Failed to load dashboard data. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
@@ -75,10 +98,17 @@ export default function Dashboard() {
       {/* Welcome Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-          Welcome back, {user?.name}!
+          Welcome back, {user?.full_name || user?.name || 'User'}!
         </h1>
         <p className="text-gray-600">Here's what's happening with your events and bookings</p>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          {error}
+        </div>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -142,9 +172,12 @@ export default function Dashboard() {
                   <h3 className="font-bold text-gray-900">{event.title}</h3>
                   <p className="text-sm text-gray-600">{event.description?.substring(0, 80)}...</p>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm text-gray-500">{new Date(event.start_time).toLocaleDateString()}</span>
+                    <span className="text-sm text-gray-500">
+                      {event.date ? new Date(event.date).toLocaleDateString() : 'No date'}
+                      {event.start_time && ` at ${event.start_time}`}
+                    </span>
                     <Link
-                      to={`/events/${event.id}`}
+                      to={`/events`}
                       className="text-blue-600 hover:underline text-sm font-medium"
                     >
                       Details
@@ -172,9 +205,13 @@ export default function Dashboard() {
                 <div key={booking.id} className="border-l-4 border-green-500 pl-4 py-2 hover:bg-gray-50 transition">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-bold text-gray-900">Booking #{booking.id.slice(0, 8)}</h3>
+                      <h3 className="font-bold text-gray-900">
+                        {booking.booking_type || 'Booking'} #{booking.id?.slice(0, 8)}
+                      </h3>
                       <p className="text-sm text-gray-600">
-                        {new Date(booking.start_time).toLocaleDateString()}
+                        {booking.date ? new Date(booking.date).toLocaleDateString() : 'No date'}
+                        {booking.start_time && ` ${booking.start_time}`}
+                        {booking.end_time && ` - ${booking.end_time}`}
                       </p>
                     </div>
                     <span
@@ -186,7 +223,7 @@ export default function Dashboard() {
                           : 'bg-red-100 text-red-800'
                       }`}
                     >
-                      {booking.status}
+                      {booking.status || 'pending'}
                     </span>
                   </div>
                 </div>
