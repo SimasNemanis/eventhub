@@ -15,13 +15,9 @@ export default function CreateEvent() {
     end_time: '',
     location: '',
     capacity: '',
-    registration_deadline: '',
     status: 'upcoming',
-    image_url: '',
-    tags: []
+    image_url: ''
   });
-
-  const [tagInput, setTagInput] = useState('');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -31,30 +27,13 @@ export default function CreateEvent() {
     }));
   };
 
-  const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, tagInput.trim()]
-      }));
-      setTagInput('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
       setLoading(true);
 
-      // Prepare data for backend
+      // Prepare data for backend - only fields that exist in database
       const eventData = {
         title: formData.title,
         description: formData.description,
@@ -62,12 +41,10 @@ export default function CreateEvent() {
         date: formData.date, // YYYY-MM-DD
         start_time: formData.start_time, // HH:MM
         end_time: formData.end_time, // HH:MM
-        location: formData.location,
+        location: formData.location || null,
         capacity: parseInt(formData.capacity),
-        registration_deadline: formData.registration_deadline || null,
         status: formData.status,
         image_url: formData.image_url || null,
-        tags: formData.tags.length > 0 ? formData.tags : null,
         registered_count: 0
       };
 
@@ -113,6 +90,7 @@ export default function CreateEvent() {
               value={formData.title}
               onChange={handleChange}
               required
+              maxLength="255"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., Annual Tech Conference 2025"
             />
@@ -121,13 +99,12 @@ export default function CreateEvent() {
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
+              Description
             </label>
             <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
-              required
               rows="4"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Describe your event..."
@@ -152,6 +129,7 @@ export default function CreateEvent() {
               <option value="seminar">Seminar</option>
               <option value="networking">Networking</option>
               <option value="training">Training</option>
+              <option value="meeting">Meeting</option>
               <option value="social">Social</option>
               <option value="other">Other</option>
             </select>
@@ -204,50 +182,34 @@ export default function CreateEvent() {
           {/* Location */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Location *
+              Location
             </label>
             <input
               type="text"
               name="location"
               value={formData.location}
               onChange={handleChange}
-              required
+              maxLength="255"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g., Grand Convention Center"
             />
           </div>
 
-          {/* Capacity and Registration Deadline */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Capacity *
-              </label>
-              <input
-                type="number"
-                name="capacity"
-                value={formData.capacity}
-                onChange={handleChange}
-                required
-                min="1"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Maximum participants"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Registration Deadline
-              </label>
-              <input
-                type="date"
-                name="registration_deadline"
-                value={formData.registration_deadline}
-                onChange={handleChange}
-                min={new Date().toISOString().split('T')[0]}
-                max={formData.date}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+          {/* Capacity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Capacity *
+            </label>
+            <input
+              type="number"
+              name="capacity"
+              value={formData.capacity}
+              onChange={handleChange}
+              required
+              min="1"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Maximum participants"
+            />
           </div>
 
           {/* Status */}
@@ -272,7 +234,7 @@ export default function CreateEvent() {
           {/* Image URL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Image URL
+              Image URL (Optional)
             </label>
             <input
               type="url"
@@ -282,52 +244,16 @@ export default function CreateEvent() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="https://example.com/image.jpg"
             />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tags
-            </label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleAddTag();
-                  }
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Add a tag..."
-              />
-              <button
-                type="button"
-                onClick={handleAddTag}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-              >
-                Add
-              </button>
-            </div>
-            {formData.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {formData.tags.map((tag, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                  >
-                    {tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="ml-2 text-blue-600 hover:text-blue-800"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+            {formData.image_url && (
+              <div className="mt-2">
+                <img 
+                  src={formData.image_url} 
+                  alt="Preview" 
+                  className="h-32 w-auto rounded border"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
               </div>
             )}
           </div>
