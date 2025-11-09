@@ -12,8 +12,9 @@ export default function CalendarView() {
 
   const loadEvents = async () => {
     try {
-      const response = await api.get('/events');
-      setEvents(response.data.data || []);
+      const eventsData = await api.entities.Event.list();
+      const eventsList = eventsData.data || eventsData || [];
+      setEvents(eventsList);
     } catch (error) {
       console.error('Error loading events:', error);
     } finally {
@@ -89,7 +90,10 @@ export default function CalendarView() {
           {Array.from({ length: daysInMonth }).map((_, index) => {
             const day = index + 1;
             const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const dayEvents = events.filter(e => e.date?.startsWith(dateStr));
+            const dayEvents = events.filter(e => {
+              const eventDate = e.start_time ? new Date(e.start_time).toISOString().split('T')[0] : '';
+              return eventDate === dateStr;
+            });
 
             return (
               <div
@@ -116,10 +120,15 @@ export default function CalendarView() {
             {events.slice(0, 5).map((event) => (
               <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2">
                 <p className="font-bold">{event.title}</p>
-                <p className="text-sm text-gray-600">{event.date}</p>
+                <p className="text-sm text-gray-600">
+                  {event.start_time ? new Date(event.start_time).toLocaleDateString() : 'No date'}
+                </p>
               </div>
             ))}
           </div>
+          {events.length === 0 && (
+            <p className="text-gray-500 text-center py-8">No events scheduled</p>
+          )}
         </div>
       </div>
     </div>
