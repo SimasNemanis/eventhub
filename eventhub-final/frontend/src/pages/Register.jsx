@@ -37,7 +37,7 @@ export default function Register() {
         email: formData.email,
         password: formData.password,
       });
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.error || 'Registration failed. Please try again.');
     } finally {
