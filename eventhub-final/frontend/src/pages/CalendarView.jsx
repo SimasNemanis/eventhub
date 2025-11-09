@@ -1,172 +1,127 @@
-import { api } from "@/api/client";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Calendar, Clock, MapPin } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday } from "date-fns";
+import { useState, useEffect } from 'react';
+import api from '../api/client';
 
 export default function CalendarView() {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [events, setEvents] = useState([]);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [loading, setLoading] = useState(true);
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api.entities.Event.list(),
-  });
+  useEffect(() => {
+    loadEvents();
+  }, []);
 
-  const { data: bookings = [] } = useQuery({
-    queryKey: ['allBookings'],
-    queryFn: () => api.entities.Booking.list(),
-  });
-
-  const monthStart = startOfMonth(currentDate);
-  const monthEnd = endOfMonth(currentDate);
-  const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-
-  // Fill to complete weeks
-  const startDay = monthStart.getDay();
-  const endDay = monthEnd.getDay();
-  const prevMonthDays = Array(startDay).fill(null);
-  const nextMonthDays = Array(6 - endDay).fill(null);
-  const allDays = [...prevMonthDays, ...daysInMonth, ...nextMonthDays];
-
-  const getEventsForDate = (date) => {
-    if (!date) return [];
-    return events.filter(event => isSameDay(new Date(event.date), date));
+  const loadEvents = async () => {
+    try {
+      const response = await api.get('/events');
+      setEvents(response.data.data || []);
+    } catch (error) {
+      console.error('Error loading events:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getBookingsForDate = (date) => {
-    if (!date) return [];
-    return bookings.filter(booking => isSameDay(new Date(booking.date), date));
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    return { daysInMonth, startingDayOfWeek };
   };
 
-  const selectedDateEvents = getEventsForDate(selectedDate);
-  const selectedDateBookings = getBookingsForDate(selectedDate);
+  const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentMonth);
+  const monthName = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  const previousMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
+  if (loading) {
+    return <div className="text-center py-8">Loading calendar...</div>;
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF9' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Calendar</h1>
-          <p className="text-gray-600">View all events and bookings in calendar format</p>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">Calendar View</h1>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        {/* Calendar Header */}
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={previousMonth}
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            Previous
+          </button>
+          <h2 className="text-2xl font-bold">{monthName}</h2>
+          <button
+            onClick={nextMonth}
+            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+          >
+            Next
+          </button>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Calendar */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg elevation-1 p-6">
-              {/* Calendar Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {format(currentDate, 'MMMM yyyy')}
-                </h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => setCurrentDate(new Date())}
-                    className="px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
-                  >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Week Days */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center font-medium text-gray-600 text-sm py-2">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar Days */}
-              <div className="grid grid-cols-7 gap-2">
-                {allDays.map((day, index) => {
-                  const dayEvents = day ? getEventsForDate(day) : [];
-                  const dayBookings = day ? getBookingsForDate(day) : [];
-                  const hasActivity = dayEvents.length > 0 || dayBookings.length > 0;
-                  const isSelected = day && isSameDay(day, selectedDate);
-                  const isCurrentDay = day && isToday(day);
-
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => day && setSelectedDate(day)}
-                      disabled={!day || !isSameMonth(day, currentDate)}
-                      className={`aspect-square p-2 rounded-lg transition-all relative ${
-                        !day || !isSameMonth(day, currentDate)
-                          ? 'text-gray-300 cursor-default'
-                          : isSelected
-                          ? 'text-white elevation-2'
-                          : isCurrentDay
-                          ? 'bg-blue-50 text-blue-600 font-bold'
-                          : 'hover:bg-gray-100'
-                      }`}
-                      style={isSelected ? { backgroundColor: 'var(--md-primary)' } : {}}
-                    >
-                      {day && (
-                        <>
-                          <span className="text-sm">{format(day, 'd')}</span>
-                          {hasActivity && (
-                            <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex gap-1">
-                              {dayEvents.length > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              )}
-                              {dayBookings.length > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Legend */}
-              <div className="flex items-center gap-6 mt-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-sm text-gray-600">Events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-gray-600">Bookings</span>
-                </div>
-              </div>
+        {/* Day Headers */}
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+            <div key={day} className="text-center font-bold text-gray-600 py-2">
+              {day}
             </div>
+          ))}
+        </div>
+
+        {/* Calendar Days */}
+        <div className="grid grid-cols-7 gap-2">
+          {/* Empty cells for days before month starts */}
+          {Array.from({ length: startingDayOfWeek }).map((_, index) => (
+            <div key={`empty-${index}`} className="aspect-square" />
+          ))}
+
+          {/* Actual days */}
+          {Array.from({ length: daysInMonth }).map((_, index) => {
+            const day = index + 1;
+            const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayEvents = events.filter(e => e.date?.startsWith(dateStr));
+
+            return (
+              <div
+                key={day}
+                className="aspect-square border rounded p-2 hover:bg-gray-50 cursor-pointer"
+              >
+                <div className="font-bold text-gray-700">{day}</div>
+                {dayEvents.length > 0 && (
+                  <div className="mt-1">
+                    <span className="text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                      {dayEvents.length} event{dayEvents.length > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Events List */}
+        <div className="mt-8">
+          <h3 className="text-xl font-bold mb-4">Upcoming Events</h3>
+          <div className="space-y-2">
+            {events.slice(0, 5).map((event) => (
+              <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2">
+                <p className="font-bold">{event.title}</p>
+                <p className="text-sm text-gray-600">{event.date}</p>
+              </div>
+            ))}
           </div>
-
-          {/* Selected Date Details */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg elevation-1 p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
-                {format(selectedDate, 'MMMM d, yyyy')}
-              </h3>
-
-              {/* Events */}
-              {selectedDateEvents.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4" style={{ color: 'var(--md-primary)' }} />
-                    Events ({selectedDateEvents.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {selectedDateEvents.map(event => (
-                      <div key={event.id} className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                        <p className="font-medium text-gray-900 mb-1">{event.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-3 h-3" />
- 
- 
+        </div>
+      </div>
+    </div>
+  );
+}
