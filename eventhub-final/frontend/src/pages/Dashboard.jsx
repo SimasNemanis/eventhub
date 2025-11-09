@@ -22,18 +22,19 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [eventsRes, bookingsRes, resourcesRes] = await Promise.all([
-        api.get('/events'),
-        api.get('/bookings/my-bookings'),
-        api.get('/resources')
+      const [eventsData, bookingsData, resourcesData] = await Promise.all([
+        api.entities.Event.list(),
+        api.entities.Booking.list(),
+        api.entities.Resource.list()
       ]);
 
-      const events = eventsRes.data.data || [];
-      const bookings = bookingsRes.data.data || [];
-      const resources = resourcesRes.data.data || [];
+      // Handle response - check if data is wrapped or direct
+      const events = eventsData.data || eventsData || [];
+      const bookings = bookingsData.data || bookingsData || [];
+      const resources = resourcesData.data || resourcesData || [];
 
       // Get upcoming events (future dates)
-      const upcomingEvents = events.filter(event => new Date(event.date) >= new Date());
+      const upcomingEvents = events.filter(event => new Date(event.start_time) >= new Date());
       
       // Count available resources
       const availableResources = resources.filter(r => r.available).length;
@@ -50,8 +51,9 @@ export default function Dashboard() {
 
       // If admin, load user count
       if (user?.role === 'admin') {
-        const usersRes = await api.get('/users');
-        setStats(prev => ({ ...prev, totalUsers: usersRes.data.data?.length || 0 }));
+        const usersData = await api.entities.User.list();
+        const users = usersData.data || usersData || [];
+        setStats(prev => ({ ...prev, totalUsers: users.length }));
       }
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -140,7 +142,7 @@ export default function Dashboard() {
                   <h3 className="font-bold text-gray-900">{event.title}</h3>
                   <p className="text-sm text-gray-600">{event.description?.substring(0, 80)}...</p>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-sm text-gray-500">{new Date(event.date).toLocaleDateString()}</span>
+                    <span className="text-sm text-gray-500">{new Date(event.start_time).toLocaleDateString()}</span>
                     <Link
                       to={`/events/${event.id}`}
                       className="text-blue-600 hover:underline text-sm font-medium"
@@ -172,7 +174,7 @@ export default function Dashboard() {
                     <div>
                       <h3 className="font-bold text-gray-900">Booking #{booking.id.slice(0, 8)}</h3>
                       <p className="text-sm text-gray-600">
-                        {new Date(booking.booking_date_start).toLocaleDateString()}
+                        {new Date(booking.start_time).toLocaleDateString()}
                       </p>
                     </div>
                     <span
