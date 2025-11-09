@@ -20,6 +20,7 @@ export default async function handler(req, res) {
     const targetUrl = `${BACKEND_URL}/${pathString}`;
     
     console.log('Proxying to:', targetUrl);
+    console.log('Request body:', req.body);
     
     // Prepare headers
     const headers = {
@@ -30,12 +31,22 @@ export default async function handler(req, res) {
       headers['Authorization'] = req.headers.authorization;
     }
     
-    // Make request to backend
-    const response = await fetch(targetUrl, {
+    // Prepare request options
+    const options = {
       method: req.method,
       headers: headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
-    });
+    };
+    
+    // Add body for non-GET/HEAD requests
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      // req.body is already parsed by Vercel, so we need to stringify it
+      options.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
+    
+    console.log('Sending to backend:', options.body);
+    
+    // Make request to backend
+    const response = await fetch(targetUrl, options);
     
     const data = await response.json();
     return res.status(response.status).json(data);
