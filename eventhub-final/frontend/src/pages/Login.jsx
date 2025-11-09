@@ -20,7 +20,7 @@ export default function Login() {
 
     try {
       await login(formData.email, formData.password);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.error || 'Invalid email or password');
     } finally {
