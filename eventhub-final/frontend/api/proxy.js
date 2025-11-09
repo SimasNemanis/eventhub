@@ -1,6 +1,6 @@
 export const config = {
   api: {
-    bodyParser: false,  // Disable automatic parsing
+    bodyParser: false,
   },
 };
 
@@ -42,9 +42,10 @@ export default async function handler(req, res) {
     
     const headers = {
       'Content-Type': 'application/json',
+      'Origin': 'https://eventhub-tau.vercel.app',  // Add Origin header
     };
     
-    if (req.headers.authorization) {
+    if (req.headers.authorization ) {
       headers['Authorization'] = req.headers.authorization;
     }
     
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
     };
     
     if (body) {
-      options.body = body;  // Send raw body as-is
+      options.body = body;
     }
     
     console.log('Sending to backend:', body);
