@@ -1,172 +1,106 @@
-import { api } from "@/api/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Camera, Save, Mail, Phone, Building, FileText, Bell, Calendar, Package } from "lucide-react";
-import { Input } from "../components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { format } from "date-fns";
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import api from '../api/client';
 
 export default function Profile() {
-  const queryClient = useQueryClient();
-  const [uploading, setUploading] = useState(false);
-
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.auth.me(),
-  });
-
-  const { data: bookings = [] } = useQuery({
-    queryKey: ['myBookings', user?.email],
-    queryFn: () => api.entities.Booking.filter({ created_by: user?.email }),
-    enabled: !!user?.email,
-  });
-
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
-    full_name: user?.full_name || '',
-    phone: user?.phone || '',
-    department: user?.department || '',
-    bio: user?.bio || '',
-    notification_preferences: user?.notification_preferences || {
-      email_reminders: true,
-      booking_confirmations: true,
-      weekly_digest: true
-    }
+    name: '',
+    email: ''
   });
+  const [message, setMessage] = useState('');
 
-  const updateProfileMutation = useMutation({
-    mutationFn: (data) => api.auth.updateMe(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['currentUser']);
-    },
-  });
-
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      const { file_url } = await api.integrations.Core.UploadFile({ file });
-      await api.auth.updateMe({ avatar_url: file_url });
-      queryClient.invalidateQueries(['currentUser']);
-    } catch (error) {
-      console.error("Upload error:", error);
-    }
-    setUploading(false);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    updateProfileMutation.mutate(formData);
-  };
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       setFormData({
-        full_name: user.full_name || '',
-        phone: user.phone || '',
-        department: user.department || '',
-        bio: user.bio || '',
-        notification_preferences: user.notification_preferences || {
-          email_reminders: true,
-          booking_confirmations: true,
-          weekly_digest: true
-        }
+        name: user.name || '',
+        email: user.email || ''
       });
     }
   }, [user]);
 
-  const stats = {
-    totalBookings: bookings.length,
-    activeBookings: bookings.filter(b => b.status === 'confirmed').length,
-    eventBookings: bookings.filter(b => b.booking_type === 'event').length,
-    resourceBookings: bookings.filter(b => b.booking_type === 'resource').length,
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/users/${user.id}`, formData);
+      setMessage('Profile updated successfully!');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      setMessage('Error updating profile');
+      console.error('Error:', error);
+    }
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#FAFAF9' }}>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h1>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">My Profile</h1>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Profile Card */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg elevation-1 p-6 text-center">
-              <div className="relative inline-block mb-4">
-                <div className="w-32 h-32 rounded-full mx-auto overflow-hidden" style={{ backgroundColor: 'var(--md-accent)' }}>
-                  {user?.avatar_url ? (
-                    <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white text-4xl font-bold">
-                      {user?.full_name?.[0]?.toUpperCase() || 'U'}
-                    </div>
-                  )}
-                </div>
-                <label className="absolute bottom-0 right-0 p-2 rounded-full bg-white elevation-2 cursor-pointer hover-elevation-3">
-                  <Camera className="w-5 h-5" style={{ color: 'var(--md-primary)' }} />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleAvatarUpload}
-                    disabled={uploading}
-                  />
-                </label>
-              </div>
+      <div className="max-w-2xl bg-white rounded-lg shadow p-6">
+        {message && (
+          <div className={`mb-4 p-4 rounded ${message.includes('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+            {message}
+          </div>
+        )}
 
-              <h2 className="text-2xl font-bold text-gray-900 mb-1">{user?.full_name}</h2>
-              <p className="text-gray-600 mb-4">{user?.email}</p>
-              <span className="inline-block px-4 py-2 rounded-full text-sm font-medium text-white" style={{ backgroundColor: 'var(--md-primary)' }}>
-                {user?.role === 'admin' ? 'Administrator' : 'Member'}
-              </span>
-
-              {/* Stats */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{stats.totalBookings}</p>
-                    <p className="text-sm text-gray-600">Total Bookings</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{stats.activeBookings}</p>
-                    <p className="text-sm text-gray-600">Active</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{stats.eventBookings}</p>
-                    <p className="text-sm text-gray-600">Events</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-gray-900">{stats.resourceBookings}</p>
-                    <p className="text-sm text-gray-600">Resources</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+        <form onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 font-bold mb-2">Name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
           </div>
 
-          {/* Right Column - Edit Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Personal Information */}
-            <div className="bg-white rounded-lg elevation-1 p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Personal Information</h3>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="full_name" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Full Name
-                  </Label>
-                  <Input
-                    id="full_name"
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                    placeholder="Enter your full name"
-                  />
-                </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 font-bold mb-2">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
 
-                <div>
-                  <Label htmlFor="email" className="text-sm font-medium text-gray-700 mb-2 block">
-                    Email
-                  </Label>
-                  <div className="relative">
- 
- import React, { useState } from "react";
+          <div className="mb-6">
+            <label className="block text-gray-700 font-bold mb-2">Role</label>
+            <input
+              type="text"
+              value={user?.role || 'user'}
+              disabled
+              className="w-full px-4 py-2 border rounded-lg bg-gray-100 text-gray-600"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition"
+          >
+            Update Profile
+          </button>
+        </form>
+
+        <div className="mt-8 pt-8 border-t">
+          <h2 className="text-xl font-bold mb-4">Account Information</h2>
+          <div className="space-y-2 text-gray-600">
+            <p><span className="font-medium">User ID:</span> {user?.id?.slice(0, 8)}...</p>
+            <p><span className="font-medium">Account Type:</span> {user?.role}</p>
+            <p><span className="font-medium">Member Since:</span> {new Date(user?.created_at || Date.now()).toLocaleDateString()}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
