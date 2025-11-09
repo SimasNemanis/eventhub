@@ -1,172 +1,130 @@
-import React, { useState } from "react";
-import { api } from "../api/client";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
-import { addDays, addWeeks, addMonths } from "date-fns";
-import EventForm from "../components/admin/EventForm";
-import ResourceForm from "../components/admin/ResourceForm";
-import EventList from "../components/admin/EventList";
-import ResourceList from "../components/admin/ResourceList";
+import { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import api from '../api/client';
 
 export default function Admin() {
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("events");
-  const [showEventForm, setShowEventForm] = useState(false);
-  const [showResourceForm, setShowResourceForm] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [editingResource, setEditingResource] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [resources, setResources] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api.entities.Event.list('-created_date'),
-  });
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: resources = [] } = useQuery({
-    queryKey: ['resources'],
-    queryFn: () => api.entities.Resource.list('-created_date'),
-  });
+  const loadData = async () => {
+    try {
+      const [eventsRes, resourcesRes, usersRes] = await Promise.all([
+        api.get('/events'),
+        api.get('/resources'),
+        api.get('/users')
+      ]);
+      setEvents(eventsRes.data.data);
+      setResources(resourcesRes.data.data);
+      setUsers(usersRes.data.data);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const generateRecurringEvents = (baseEvent) => {
-    const events = [];
-    const startDate = new Date(baseEvent.date);
-    const endDate = new Date(baseEvent.recurrence_end_date);
-    const seriesId = `series_${Date.now()}`;
-    
-    let currentDate = startDate;
-    
-    while (currentDate <= endDate) {
-      const eventData = {
-        ...baseEvent,
-        date: currentDate.toISOString().split('T')[0],
-        series_id: seriesId,
-        registered_count: 0
-      };
-      
-      delete eventData.recurrence_end_date;
-      events.push(eventData);
-      
-      switch (baseEvent.recurrence_pattern) {
-        case 'daily':
-          currentDate = addDays(currentDate, 1);
-          break;
-        case 'weekly':
-          currentDate = addWeeks(currentDate, 1);
-          break;
-        case 'biweekly':
-          currentDate = addWeeks(currentDate, 2);
-          break;
-        case 'monthly':
-          currentDate = addMonths(currentDate, 1);
-          break;
+  const handleDeleteEvent = async (id) => {
+    if (window.confirm('Are you sure you want to delete this event?')) {
+      try {
+        await api.delete(`/events/${id}`);
+        loadData();
+      } catch (error) {
+        console.error('Error deleting event:', error);
       }
     }
-    
-    return events;
   };
 
-  const createEventMutation = useMutation({
-    mutationFn: async (data) => {
-      if (data.is_recurring) {
-        const recurringEvents = generateRecurringEvents(data);
-        await api.entities.Event.bulkCreate(recurringEvents);
-      } else {
-        await api.entities.Event.create(data);
+  const handleDeleteResource = async (id) => {
+    if (window.confirm('Are you sure you want to delete this resource?')) {
+      try {
+        await api.delete(`/resources/${id}`);
+        loadData();
+      } catch (error) {
+        console.error('Error deleting resource:', error);
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['events']);
-      setShowEventForm(false);
-      setEditingEvent(null);
-    },
-  });
-
-  const updateEventMutation = useMutation({
-    mutationFn: ({ id, data }) => api.entities.Event.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['events']);
-      setShowEventForm(false);
-      setEditingEvent(null);
-    },
-  });
-
-  const deleteEventMutation = useMutation({
-    mutationFn: (id) => api.entities.Event.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['events']);
-    },
-  });
-
-  const createResourceMutation = useMutation({
-    mutationFn: (data) => api.entities.Resource.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['resources']);
-      setShowResourceForm(false);
-      setEditingResource(null);
-    },
-  });
-
-  const updateResourceMutation = useMutation({
-    mutationFn: ({ id, data }) => api.entities.Resource.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['resources']);
-      setShowResourceForm(false);
-      setEditingResource(null);
-    },
-  });
-
-  const deleteResourceMutation = useMutation({
-    mutationFn: (id) => api.entities.Resource.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries(['resources']);
-    },
-  });
-
-  const handleEventSubmit = (data) => {
-    if (editingEvent) {
-      updateEventMutation.mutate({ id: editingEvent.id, data });
-    } else {
-      createEventMutation.mutate(data);
     }
   };
 
-  const handleResourceSubmit = (data) => {
-    if (editingResource) {
-      updateResourceMutation.mutate({ id: editingResource.id, data });
-    } else {
-      createResourceMutation.mutate(data);
-    }
-  };
+  if (loading) {
+    return <div className="text-center py-8">Loading...</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Admin Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage events and resources</p>
-        </div>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 bg-white dark:bg-gray-800">
-            <TabsTrigger value="events" className="flex items-center gap-2 dark:data-[state=active]:bg-gray-700">
-              <Calendar className="w-4 h-4" />
-              Events
-            </TabsTrigger>
-            <TabsTrigger value="resources" className="flex items-center gap-2 dark:data-[state=active]:bg-gray-700">
-              <Package className="w-4 h-4" />
-              Resources
-            </TabsTrigger>
-          </TabsList>
+      <Tabs defaultValue="events">
+        <TabsList>
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="resources">Resources</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="events">
-            <div className="bg-white dark:bg-gray-800 rounded-lg elevation-1 p-6 transition-colors">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Manage Events</h2>
-                <button
-                  onClick={() => {
-                    setEditingEvent(null);
-                    setShowEventForm(true);
-                  }}
-                  className="px-6 py-3 rounded-lg text-white font-medium ripple material-button flex items-center gap-2"
-                  style={{ backgroundColor: 'var(--md-primary)' }}
- 
- 
+        <TabsContent value="events">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-4">Manage Events</h2>
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div key={event.id} className="border p-4 rounded flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold">{event.title}</h3>
+                    <p className="text-gray-600">{event.date}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="resources">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-4">Manage Resources</h2>
+            <div className="space-y-4">
+              {resources.map((resource) => (
+                <div key={resource.id} className="border p-4 rounded flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold">{resource.name}</h3>
+                    <p className="text-gray-600">{resource.type}</p>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteResource(resource.id)}
+                    className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="users">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-2xl font-bold mb-4">Manage Users</h2>
+            <div className="space-y-4">
+              {users.map((user) => (
+                <div key={user.id} className="border p-4 rounded">
+                  <h3 className="font-bold">{user.name}</h3>
+                  <p className="text-gray-600">{user.email}</p>
+                  <p className="text-sm text-gray-500">Role: {user.role}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
