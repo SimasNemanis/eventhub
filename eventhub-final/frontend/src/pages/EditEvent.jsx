@@ -7,19 +7,18 @@ export default function EditEvent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    category: '',
+    date: '',
     start_time: '',
     end_time: '',
     location: '',
-    category: 'workshop',
-    max_participants: '',
-    registration_deadline: '',
+    capacity: '',
     status: 'upcoming',
-    image_url: '',
-    tags: '',
+    image_url: ''
   });
 
   useEffect(() => {
@@ -28,32 +27,26 @@ export default function EditEvent() {
 
   const loadEvent = async () => {
     try {
+      setLoading(true);
       const eventData = await api.entities.Event.getById(id);
       const event = eventData.data || eventData;
-
-      // Format datetime for input fields
-      const formatDateTime = (dateStr) => {
-        if (!dateStr) return '';
-        const date = new Date(dateStr);
-        return date.toISOString().slice(0, 16); // Format: YYYY-MM-DDTHH:mm
-      };
 
       setFormData({
         title: event.title || '',
         description: event.description || '',
-        start_time: formatDateTime(event.start_time),
-        end_time: formatDateTime(event.end_time),
+        category: event.category || '',
+        date: event.date || '', // Already in YYYY-MM-DD format
+        start_time: event.start_time || '', // Already in HH:MM format
+        end_time: event.end_time || '', // Already in HH:MM format
         location: event.location || '',
-        category: event.category || 'workshop',
-        max_participants: event.max_participants || '',
-        registration_deadline: formatDateTime(event.registration_deadline),
+        capacity: event.capacity || '',
         status: event.status || 'upcoming',
-        image_url: event.image_url || '',
-        tags: Array.isArray(event.tags) ? event.tags.join(', ') : '',
+        image_url: event.image_url || ''
       });
-    } catch (err) {
-      console.error('Error loading event:', err);
-      setError('Failed to load event. Please try again.');
+    } catch (error) {
+      console.error('Error loading event:', error);
+      alert('Failed to load event');
+      navigate('/admin');
     } finally {
       setLoading(false);
     }
@@ -69,23 +62,33 @@ export default function EditEvent() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSaving(true);
-
+    
     try {
-      // Prepare data for submission
+      setSaving(true);
+
       const eventData = {
-        ...formData,
-        max_participants: formData.max_participants ? parseInt(formData.max_participants) : null,
-        tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        date: formData.date, // YYYY-MM-DD
+        start_time: formData.start_time, // HH:MM
+        end_time: formData.end_time, // HH:MM
+        location: formData.location || null,
+        capacity: parseInt(formData.capacity),
+        status: formData.status,
+        image_url: formData.image_url || null
       };
 
       await api.entities.Event.update(id, eventData);
+      
       alert('Event updated successfully!');
       navigate('/admin');
-    } catch (err) {
-      console.error('Error updating event:', err);
-      setError(err.message || 'Failed to update event. Please try again.');
+    } catch (error) {
+      console.error('Error updating event:', error);
+      const errorMsg = error.response?.data?.error || 
+                      error.response?.data?.errors?.map(e => e.msg).join(', ') ||
+                      'Failed to update event';
+      alert(errorMsg);
     } finally {
       setSaving(false);
     }
@@ -106,17 +109,11 @@ export default function EditEvent() {
           <h1 className="text-3xl font-bold">Edit Event</h1>
           <button
             onClick={() => navigate('/admin')}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
+            className="px-4 py-2 text-gray-600 hover:text-gray-900"
           >
-            ← Back to Admin
+            Cancel
           </button>
         </div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
           {/* Title */}
@@ -130,126 +127,121 @@ export default function EditEvent() {
               value={formData.title}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Annual Tech Conference 2025"
+              maxLength="255"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description *
+              Description
             </label>
             <textarea
               name="description"
               value={formData.description}
               onChange={handleChange}
-              required
-              rows={4}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Describe your event..."
+              rows="4"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Date and Time Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Category */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Category *
+            </label>
+            <select
+              name="category"
+              value={formData.category}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select a category</option>
+              <option value="conference">Conference</option>
+              <option value="workshop">Workshop</option>
+              <option value="seminar">Seminar</option>
+              <option value="networking">Networking</option>
+              <option value="training">Training</option>
+              <option value="meeting">Meeting</option>
+              <option value="social">Social</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          {/* Date and Time */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Start Date & Time *
+                Date *
               </label>
               <input
-                type="datetime-local"
+                type="date"
+                name="date"
+                value={formData.date}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Time *
+              </label>
+              <input
+                type="time"
                 name="start_time"
                 value={formData.start_time}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                End Date & Time *
+                End Time *
               </label>
               <input
-                type="datetime-local"
+                type="time"
                 name="end_time"
                 value={formData.end_time}
                 onChange={handleChange}
                 required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          {/* Location and Category Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Location *
-              </label>
-              <input
-                type="text"
-                name="location"
-                value={formData.location}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Main Conference Hall"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Category *
-              </label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleChange}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="workshop">Workshop</option>
-                <option value="seminar">Seminar</option>
-                <option value="conference">Conference</option>
-                <option value="training">Training</option>
-                <option value="meeting">Meeting</option>
-                <option value="social">Social</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
+          {/* Location */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Location
+            </label>
+            <input
+              type="text"
+              name="location"
+              value={formData.location}
+              onChange={handleChange}
+              maxLength="255"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          {/* Max Participants and Registration Deadline Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Max Participants
-              </label>
-              <input
-                type="number"
-                name="max_participants"
-                value={formData.max_participants}
-                onChange={handleChange}
-                min="1"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Leave empty for unlimited"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Registration Deadline
-              </label>
-              <input
-                type="datetime-local"
-                name="registration_deadline"
-                value={formData.registration_deadline}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+          {/* Capacity */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Capacity *
+            </label>
+            <input
+              type="number"
+              name="capacity"
+              value={formData.capacity}
+              onChange={handleChange}
+              required
+              min="1"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           {/* Status */}
@@ -262,7 +254,7 @@ export default function EditEvent() {
               value={formData.status}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="upcoming">Upcoming</option>
               <option value="ongoing">Ongoing</option>
@@ -274,40 +266,35 @@ export default function EditEvent() {
           {/* Image URL */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Image URL
+              Image URL (Optional)
             </label>
             <input
               type="url"
               name="image_url"
               value={formData.image_url}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="https://example.com/image.jpg"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {formData.image_url && (
+              <div className="mt-2">
+                <img 
+                  src={formData.image_url} 
+                  alt="Preview" 
+                  className="h-32 w-auto rounded border"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
           </div>
 
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Tags
-            </label>
-            <input
-              type="text"
-              name="tags"
-              value={formData.tags}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="technology, networking, professional (comma-separated)"
-            />
-            <p className="text-sm text-gray-500 mt-1">Separate tags with commas</p>
-          </div>
-
-          {/* Submit Buttons */}
+          {/* Submit Button */}
           <div className="flex gap-4 pt-4">
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
