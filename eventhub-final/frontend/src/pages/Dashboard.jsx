@@ -1,210 +1,226 @@
-import React from "react";
-import { api } from "@/api/client";
-import { useQuery } from "@tanstack/react-query";
-import { Calendar, Package, TrendingUp, Users, Clock, MapPin } from "lucide-react";
-import { format } from "date-fns";
-import { Link } from "react-router-dom";
-import { createPageUrl } from "../utils/navigation";
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Calendar, Users, TrendingUp, Clock } from 'lucide-react';
+import api from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Dashboard() {
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.auth.me(),
+  const { user } = useAuth();
+  const [stats, setStats] = useState({
+    upcomingEvents: 0,
+    myBookings: 0,
+    availableResources: 0,
+    totalUsers: 0
   });
+  const [recentEvents, setRecentEvents] = useState([]);
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: events = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api.entities.Event.list('-date'),
-  });
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
 
-  const { data: resources = [] } = useQuery({
-    queryKey: ['resources'],
-    queryFn: () => api.entities.Resource.list(),
-  });
+  const loadDashboardData = async () => {
+    try {
+      const [eventsRes, bookingsRes, resourcesRes] = await Promise.all([
+        api.get('/events'),
+        api.get('/bookings/my-bookings'),
+        api.get('/resources')
+      ]);
 
-  const { data: bookings = [] } = useQuery({
-    queryKey: ['myBookings', user?.email],
-    queryFn: () => api.entities.Booking.filter({ created_by: user?.email }),
-    enabled: !!user?.email,
-  });
+      const events = eventsRes.data.data || [];
+      const bookings = bookingsRes.data.data || [];
+      const resources = resourcesRes.data.data || [];
 
-  const upcomingEvents = events.filter(e => e.status === 'upcoming').slice(0, 3);
-  const availableResources = resources.filter(r => r.available);
-  const myActiveBookings = bookings.filter(b => b.status === 'confirmed');
+      // Get upcoming events (future dates)
+      const upcomingEvents = events.filter(event => new Date(event.date) >= new Date());
+      
+      // Count available resources
+      const availableResources = resources.filter(r => r.available).length;
 
-  const stats = [
-    {
-      title: "Upcoming Events",
-      value: events.filter(e => e.status === 'upcoming').length,
-      icon: Calendar,
-      color: "bg-blue-500",
-      link: createPageUrl("Events")
-    },
-    {
-      title: "Available Resources",
-      value: availableResources.length,
-      icon: Package,
-      color: "bg-green-500",
-      link: createPageUrl("Resources")
-    },
-    {
-      title: "My Bookings",
-      value: myActiveBookings.length,
-      icon: TrendingUp,
-      color: "bg-purple-500",
-      link: createPageUrl("MyBookings")
-    },
-    {
-      title: "Total Events",
-      value: events.length,
-      icon: Users,
-      color: "bg-orange-500",
-      link: createPageUrl("Events")
+      setRecentEvents(upcomingEvents.slice(0, 5));
+      setRecentBookings(bookings.slice(0, 5));
+      
+      setStats({
+        upcomingEvents: upcomingEvents.length,
+        myBookings: bookings.length,
+        availableResources: availableResources,
+        totalUsers: 0
+      });
+
+      // If admin, load user count
+      if (user?.role === 'admin') {
+        const usersRes = await api.get('/users');
+        setStats(prev => ({ ...prev, totalUsers: usersRes.data.data?.length || 0 }));
+      }
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Welcome back, {user?.full_name || 'User'}!
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">Here's what's happening with your events and resources</p>
+    <div className="container mx-auto px-4 py-8">
+      {/* Welcome Header */}
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold text-gray-900 mb-2">
+          Welcome back, {user?.name}!
+        </h1>
+        <p className="text-gray-600">Here's what's happening with your events and bookings</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm font-medium">Upcoming Events</p>
+              <p className="text-3xl font-bold mt-2">{stats.upcomingEvents}</p>
+            </div>
+            <Calendar className="w-12 h-12 text-blue-200" />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <Link
-              key={index}
-              to={stat.link}
-              className="bg-white dark:bg-gray-800 rounded-lg p-6 elevation-1 hover-elevation-2 cursor-pointer transition-all duration-300"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${stat.color}`}>
-                  <stat.icon className="w-6 h-6 text-white" />
-                </div>
+        <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm font-medium">My Bookings</p>
+              <p className="text-3xl font-bold mt-2">{stats.myBookings}</p>
+            </div>
+            <Clock className="w-12 h-12 text-green-200" />
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-purple-100 text-sm font-medium">Available Resources</p>
+              <p className="text-3xl font-bold mt-2">{stats.availableResources}</p>
+            </div>
+            <TrendingUp className="w-12 h-12 text-purple-200" />
+          </div>
+        </div>
+
+        {user?.role === 'admin' && (
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-orange-100 text-sm font-medium">Total Users</p>
+                <p className="text-3xl font-bold mt-2">{stats.totalUsers}</p>
               </div>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">{stat.value}</p>
-              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{stat.title}</p>
+              <Users className="w-12 h-12 text-orange-200" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Events */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Upcoming Events</h2>
+            <Link to="/events" className="text-blue-600 hover:text-blue-700 font-medium">
+              View All →
             </Link>
-          ))}
+          </div>
+          <div className="space-y-4">
+            {recentEvents.length > 0 ? (
+              recentEvents.map((event) => (
+                <div key={event.id} className="border-l-4 border-blue-500 pl-4 py-2 hover:bg-gray-50 transition">
+                  <h3 className="font-bold text-gray-900">{event.title}</h3>
+                  <p className="text-sm text-gray-600">{event.description?.substring(0, 80)}...</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm text-gray-500">{new Date(event.date).toLocaleDateString()}</span>
+                    <Link
+                      to={`/events/${event.id}`}
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                    >
+                      Details
+                    </Link>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-8">No upcoming events</p>
+            )}
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-lg elevation-1 overflow-hidden transition-colors">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Upcoming Events</h2>
-                <Link
-                  to={createPageUrl("Events")}
-                  className="text-sm font-medium hover:underline"
-                  style={{ color: 'var(--md-primary)' }}
-                >
-                  View All
-                </Link>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              {upcomingEvents.length > 0 ? (
-                upcomingEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-all duration-200 hover-elevation-2"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-bold text-gray-900 dark:text-white">{event.title}</h3>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium text-white" style={{ backgroundColor: 'var(--md-primary)' }}>
-                        {event.category}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{event.description}</p>
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-700 dark:text-gray-300">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4" />
-                        <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        <span>{event.start_time}</span>
-                      </div>
-                      {event.location && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-4 h-4" />
-                          <span>{event.location}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center py-12">
-                  <Calendar className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-500 dark:text-gray-400">No upcoming events</p>
-                  <Link
-                    to={createPageUrl("Events")}
-                    className="inline-block mt-4 px-6 py-2 rounded-lg text-white font-medium ripple material-button"
-                    style={{ backgroundColor: 'var(--md-primary)' }}
-                  >
-                    Browse Events
-                  </Link>
-                </div>
-              )}
-            </div>
+        {/* Recent Bookings */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">My Recent Bookings</h2>
+            <Link to="/my-bookings" className="text-green-600 hover:text-green-700 font-medium">
+              View All →
+            </Link>
           </div>
-
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 elevation-1 transition-colors">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
-              <div className="space-y-3">
-                <Link
-                  to={createPageUrl("Events")}
-                  className="block w-full py-3 rounded-lg text-white font-medium text-center ripple material-button"
-                  style={{ backgroundColor: 'var(--md-primary)' }}
-                >
-                  Browse Events
-                </Link>
-                <Link
-                  to={createPageUrl("Resources")}
-                  className="block w-full py-3 rounded-lg border-2 font-medium text-center material-button"
-                  style={{ borderColor: 'var(--md-primary)', color: 'var(--md-primary)' }}
-                >
-                  Book Resource
-                </Link>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-lg elevation-1 overflow-hidden transition-colors">
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Available Resources</h2>
-              </div>
-              <div className="p-6">
-                <div className="space-y-3">
-                  {availableResources.slice(0, 4).map((resource) => (
-                    <div
-                      key={resource.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+          <div className="space-y-4">
+            {recentBookings.length > 0 ? (
+              recentBookings.map((booking) => (
+                <div key={booking.id} className="border-l-4 border-green-500 pl-4 py-2 hover:bg-gray-50 transition">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900">Booking #{booking.id.slice(0, 8)}</h3>
+                      <p className="text-sm text-gray-600">
+                        {new Date(booking.booking_date_start).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        booking.status === 'confirmed'
+                          ? 'bg-green-100 text-green-800'
+                          : booking.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}
                     >
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-white">{resource.name}</p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">{resource.type}</p>
-                      </div>
-                      <div className="w-2 h-2 rounded-full bg-green-500" />
-                    </div>
-                  ))}
+                      {booking.status}
+                    </span>
+                  </div>
                 </div>
-                {availableResources.length > 4 && (
-                  <Link
-                    to={createPageUrl("Resources")}
-                    className="block mt-4 text-center text-sm font-medium hover:underline"
-                    style={{ color: 'var(--md-primary)' }}
-                  >
-                    View all {availableResources.length} resources
-                  </Link>
-                )}
-              </div>
-            </div>
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-8">No bookings yet</p>
+            )}
           </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link
+            to="/events"
+            className="bg-white p-4 rounded-lg shadow hover:shadow-md transition text-center"
+          >
+            <Calendar className="w-8 h-8 mx-auto mb-2 text-blue-600" />
+            <p className="font-medium">Browse Events</p>
+          </Link>
+          <Link
+            to="/resources"
+            className="bg-white p-4 rounded-lg shadow hover:shadow-md transition text-center"
+          >
+            <TrendingUp className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+            <p className="font-medium">View Resources</p>
+          </Link>
+          <Link
+            to="/calendar"
+            className="bg-white p-4 rounded-lg shadow hover:shadow-md transition text-center"
+          >
+            <Clock className="w-8 h-8 mx-auto mb-2 text-green-600" />
+            <p className="font-medium">Calendar View</p>
+          </Link>
         </div>
       </div>
     </div>
