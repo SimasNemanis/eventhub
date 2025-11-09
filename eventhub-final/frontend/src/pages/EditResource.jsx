@@ -16,8 +16,7 @@ export default function EditResource() {
     location: '',
     available: true,
     image_url: '',
-    features: '',
-    booking_rules: '',
+    features: ''
   });
 
   useEffect(() => {
@@ -37,8 +36,7 @@ export default function EditResource() {
         location: resource.location || '',
         available: resource.available !== undefined ? resource.available : true,
         image_url: resource.image_url || '',
-        features: Array.isArray(resource.features) ? resource.features.join(', ') : '',
-        booking_rules: resource.booking_rules || '',
+        features: Array.isArray(resource.features) ? resource.features.join(', ') : ''
       });
     } catch (err) {
       console.error('Error loading resource:', err);
@@ -235,21 +233,6 @@ export default function EditResource() {
               placeholder="projector, whiteboard, WiFi (comma-separated)"
             />
             <p className="text-sm text-gray-500 mt-1">Separate features with commas</p>
-          </div>
-
-          {/* Booking Rules */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Booking Rules
-            </label>
-            <textarea
-              name="booking_rules"
-              value={formData.booking_rules}
-              onChange={handleChange}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Maximum 4 hours per booking, Must be booked 24 hours in advance"
-            />
           </div>
 
           {/* Submit Buttons */}
