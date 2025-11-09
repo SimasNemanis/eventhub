@@ -12,8 +12,9 @@ export default function Resources() {
 
   const loadResources = async () => {
     try {
-      const response = await api.get('/resources');
-      setResources(response.data.data || []);
+      const resourcesData = await api.entities.Resource.list();
+      const resourcesList = resourcesData.data || resourcesData || [];
+      setResources(resourcesList);
     } catch (error) {
       console.error('Error loading resources:', error);
     } finally {
