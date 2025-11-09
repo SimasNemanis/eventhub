@@ -1,6 +1,6 @@
 export const config = {
   api: {
-    bodyParser: true,
+    bodyParser: false,  // Disable automatic parsing
   },
 };
 
@@ -23,6 +23,23 @@ export default async function handler(req, res) {
     const pathString = Array.isArray(path) ? path.join('/') : path;
     const targetUrl = `${BACKEND_URL}/${pathString}`;
     
+    // Manually read and parse the body
+    let body = '';
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      body = await new Promise((resolve) => {
+        let data = '';
+        req.on('data', chunk => {
+          data += chunk;
+        });
+        req.on('end', () => {
+          resolve(data);
+        });
+      });
+    }
+    
+    console.log('Raw body:', body);
+    console.log('Proxying to:', targetUrl);
+    
     const headers = {
       'Content-Type': 'application/json',
     };
@@ -36,9 +53,11 @@ export default async function handler(req, res) {
       headers: headers,
     };
     
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
-      options.body = JSON.stringify(req.body);
+    if (body) {
+      options.body = body;  // Send raw body as-is
     }
+    
+    console.log('Sending to backend:', body);
     
     const response = await fetch(targetUrl, options);
     const data = await response.json();
@@ -52,4 +71,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
