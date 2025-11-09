@@ -15,7 +15,6 @@ export default function CreateResource() {
     available: true,
     image_url: '',
     features: '',
-    booking_rules: '',
   });
 
   const handleChange = (e) => {
@@ -44,7 +43,7 @@ export default function CreateResource() {
       navigate('/admin');
     } catch (err) {
       console.error('Error creating resource:', err);
-      setError(err.message || 'Failed to create resource. Please try again.');
+      setError(err.response?.data?.error || err.message || 'Failed to create resource. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -181,6 +180,7 @@ export default function CreateResource() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="https://example.com/image.jpg"
             />
+            <p className="text-sm text-gray-500 mt-1">Optional: Add an image to make the resource more appealing</p>
           </div>
 
           {/* Features */}
@@ -197,21 +197,6 @@ export default function CreateResource() {
               placeholder="projector, whiteboard, WiFi (comma-separated)"
             />
             <p className="text-sm text-gray-500 mt-1">Separate features with commas</p>
-          </div>
-
-          {/* Booking Rules */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Booking Rules
-            </label>
-            <textarea
-              name="booking_rules"
-              value={formData.booking_rules}
-              onChange={handleChange}
-              rows={3}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g., Maximum 4 hours per booking, Must be booked 24 hours in advance"
-            />
           </div>
 
           {/* Submit Buttons */}
