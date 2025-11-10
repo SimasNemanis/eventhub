@@ -36,7 +36,7 @@ export default function BookResource() {
   const loadResource = async () => {
     try {
       setLoading(true);
-      const resourceData = await api.entities.Resource.get(id);
+      const resourceData = await api.entities.Resource.getById(id);
       const resourceObj = resourceData.data || resourceData;
       setResource(resourceObj);
     } catch (error) {
