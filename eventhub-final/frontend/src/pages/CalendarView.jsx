@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Clock, MapPin } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday } from 'date-fns';
 import api from '../api/client';
@@ -7,19 +6,33 @@ import api from '../api/client';
 export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [events, setEvents] = useState([]);
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const { data: eventsData = [] } = useQuery({
-    queryKey: ['events'],
-    queryFn: () => api.entities.Event.list(),
-  });
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const { data: bookingsData = [] } = useQuery({
-    queryKey: ['allBookings'],
-    queryFn: () => api.entities.Booking.list(),
-  });
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [eventsData, bookingsData] = await Promise.all([
+        api.entities.Event.list(),
+        api.entities.Booking.list()
+      ]);
 
-  const events = eventsData.data || eventsData || [];
-  const bookings = bookingsData.data || bookingsData || [];
+      const eventsList = eventsData.data || eventsData || [];
+      const bookingsList = bookingsData.data || bookingsData || [];
+
+      setEvents(eventsList);
+      setBookings(bookingsList);
+    } catch (error) {
+      console.error('Error loading calendar data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -58,6 +71,14 @@ export default function CalendarView() {
 
   const selectedDateEvents = getEventsForDate(selectedDate);
   const selectedDateBookings = getBookingsForDate(selectedDate);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
