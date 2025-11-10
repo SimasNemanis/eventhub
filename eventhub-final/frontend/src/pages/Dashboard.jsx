@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Calendar, Package, TrendingUp, Users, Clock, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+
 
 export default function Dashboard() {
   const { data: user } = useQuery({
@@ -66,28 +66,28 @@ export default function Dashboard() {
       value: events.filter(e => e.status === 'upcoming').length,
       icon: Calendar,
       color: "bg-blue-500",
-      link: createPageUrl("Events")
+      link: "/events"
     },
     {
       title: "Available Resources",
       value: availableResources.length,
       icon: Package,
       color: "bg-green-500",
-      link: createPageUrl("Resources")
+      link: "/resources"
     },
     {
       title: "My Bookings",
       value: myActiveBookings.length,
       icon: TrendingUp,
       color: "bg-purple-500",
-      link: createPageUrl("MyBookings")
+      link: "/my-bookings"
     },
     {
       title: "Total Events",
       value: events.length,
       icon: Users,
       color: "bg-orange-500",
-      link: createPageUrl("Events")
+      link: "/events"
     }
   ];
 
@@ -153,7 +153,7 @@ export default function Dashboard() {
                   {upcomingEvents.map((event) => (
                     <Link
                       key={event.id}
-                      to={createPageUrl("Events")}
+                      to={"/events"}
                       className="block p-4 border border-gray-200 rounded-lg hover:border-blue-500 transition-colors"
                     >
                       <h3 className="font-semibold text-gray-900">{event.title}</h3>
@@ -183,7 +183,7 @@ export default function Dashboard() {
                 </div>
               )}
               <Link
-                to={createPageUrl("Events")}
+                to={"/events"}
                 className="mt-4 block text-center text-blue-600 hover:text-blue-700 font-medium"
               >
                 View all events →
@@ -229,7 +229,7 @@ export default function Dashboard() {
                 </div>
               )}
               <Link
-                to={createPageUrl("MyBookings")}
+                to={"/my-bookings"}
                 className="mt-4 block text-center text-blue-600 hover:text-blue-700 font-medium"
               >
                 View all bookings →
