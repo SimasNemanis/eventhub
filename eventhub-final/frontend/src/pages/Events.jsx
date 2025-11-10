@@ -36,8 +36,11 @@ export default function Events() {
 
   const handleRegister = async (event) => {
     try {
+      // Create booking with correct fields matching database schema
       await api.entities.Booking.create({
+        booking_type: 'event',
         event_id: event.id,
+        date: event.date,           // Use event's date
         start_time: event.start_time,
         end_time: event.end_time,
         status: 'confirmed'
@@ -47,7 +50,10 @@ export default function Events() {
       loadData(); // Reload to update registration status
     } catch (error) {
       console.error('Error registering for event:', error);
-      alert('Failed to register for event. Please try again.');
+      const errorMsg = error.response?.data?.errors?.map(e => e.msg).join(', ') ||
+                      error.response?.data?.error ||
+                      'Failed to register for event';
+      alert(errorMsg);
     }
   };
 
@@ -99,7 +105,7 @@ export default function Events() {
                   <button
                     key={category}
                     onClick={() => setCategoryFilter(category)}
-                    className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-all ${
+                    className={`px-4 py-2 rounded-lg font-medium transition whitespace-nowrap ${
                       categoryFilter === category
                         ? 'bg-blue-600 text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -118,7 +124,7 @@ export default function Events() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredEvents.map((event) => {
               const isRegistered = registeredEventIds.has(event.id);
-              const isFull = event.max_participants && event.registered_count >= event.max_participants;
+              const isFull = event.capacity && event.registered_count >= event.capacity;
 
               return (
                 <div key={event.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
@@ -137,13 +143,15 @@ export default function Events() {
                     </p>
 
                     <div className="space-y-2 text-sm text-gray-600 mb-4">
+                      {/* Fixed: Use event.date for date display */}
                       <div className="flex items-center">
                         <span className="font-medium mr-2">📅</span>
-                        {event.start_time ? new Date(event.start_time).toLocaleDateString() : 'TBA'}
+                        {event.date ? new Date(event.date).toLocaleDateString() : 'TBA'}
                       </div>
+                      {/* Fixed: Use event.start_time directly (it's already HH:MM format) */}
                       <div className="flex items-center">
                         <span className="font-medium mr-2">🕐</span>
-                        {event.start_time ? new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'TBA'}
+                        {event.start_time || 'TBA'} - {event.end_time || 'TBA'}
                       </div>
                       {event.location && (
                         <div className="flex items-center">
@@ -151,10 +159,10 @@ export default function Events() {
                           {event.location}
                         </div>
                       )}
-                      {event.max_participants && (
+                      {event.capacity && (
                         <div className="flex items-center">
                           <span className="font-medium mr-2">👥</span>
-                          {event.registered_count || 0} / {event.max_participants}
+                          {event.registered_count || 0} / {event.capacity}
                         </div>
                       )}
                     </div>
@@ -178,14 +186,8 @@ export default function Events() {
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-lg p-12 shadow-sm text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 bg-blue-100 rounded-full mx-auto mb-4 flex items-center justify-center">
-                <Search className="w-10 h-10 text-blue-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">No events found</h3>
-              <p className="text-gray-600">Try adjusting your search or filters</p>
-            </div>
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">No events found matching your criteria</p>
           </div>
         )}
       </div>
