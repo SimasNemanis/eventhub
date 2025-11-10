@@ -1,171 +1,260 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Calendar, Clock, MapPin, Package, XCircle } from "lucide-react";
+import { format } from "date-fns";
 
 export default function MyBookings() {
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState("all");
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
-
-  const loadBookings = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Call the my-bookings endpoint to get only current user's bookings
-      const response = await axios.get('/api/proxy/bookings/my-bookings', {
+  const { data: user } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const response = await fetch('/api/auth/me', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
+      if (!response.ok) throw new Error('Failed to fetch user');
+      const data = await response.json();
+      return data.data;
+    },
+  });
+
+  // ✅ FIX: Use dedicated /my-bookings endpoint instead of client-side filtering
+  // This ensures only the current user's bookings are fetched from the server
+  const { data: bookings = [], isLoading } = useQuery({
+    queryKey: ['myBookings', user?.id],
+    queryFn: async () => {
+      const response = await fetch('/api/bookings/my-bookings', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch bookings');
+      const data = await response.json();
+      return data.data || [];
+    },
+    enabled: !!user?.id,
+  });
+
+  const { data: events = [] } = useQuery({
+    queryKey: ['events'],
+    queryFn: async () => {
+      const response = await fetch('/api/events');
+      if (!response.ok) throw new Error('Failed to fetch events');
+      const data = await response.json();
+      return data.data || [];
+    },
+  });
+
+  const { data: resources = [] } = useQuery({
+    queryKey: ['resources'],
+    queryFn: async () => {
+      const response = await fetch('/api/resources');
+      if (!response.ok) throw new Error('Failed to fetch resources');
+      const data = await response.json();
+      return data.data || [];
+    },
+  });
+
+  const cancelBookingMutation = useMutation({
+    mutationFn: async (booking) => {
+      // Update booking status to cancelled
+      const response = await fetch(`/api/bookings/${booking.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: 'cancelled' })
+      });
       
-      // Handle response
-      const bookingsList = response.data.data || response.data || [];
-      setBookings(Array.isArray(bookingsList) ? bookingsList : []);
-    } catch (err) {
-      console.error('Error loading bookings:', err);
-      setError('Failed to load bookings. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (!response.ok) throw new Error('Failed to cancel booking');
 
-  const handleCancelBooking = async (id) => {
-    if (window.confirm('Are you sure you want to cancel this booking?')) {
-      try {
-        await axios.delete(`/api/proxy/bookings/${id}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-        
-        // Reload bookings after successful deletion
-        loadBookings();
-      } catch (err) {
-        console.error('Error canceling booking:', err);
-        const errorMessage = err.response?.data?.error || 'Failed to cancel booking. Please try again.';
-        alert(errorMessage);
+      // If it's an event booking, decrease the registered count
+      if (booking.booking_type === 'event') {
+        const event = events.find(e => e.id === booking.event_id);
+        if (event && event.registered_count > 0) {
+          await fetch(`/api/events/${event.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              registered_count: event.registered_count - 1
+            })
+          });
+        }
       }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['myBookings']);
+      queryClient.invalidateQueries(['events']);
+    },
+  });
+
+  const getEventDetails = (eventId) => events.find(e => e.id === eventId);
+  const getResourceDetails = (resourceId) => resources.find(r => r.id === resourceId);
+
+  const filteredBookings = bookings.filter(booking => {
+    if (activeTab === "all") return true;
+    if (activeTab === "events") return booking.booking_type === "event";
+    if (activeTab === "resources") return booking.booking_type === "resource";
+    if (activeTab === "active") return booking.status === "confirmed";
+    if (activeTab === "cancelled") return booking.status === "cancelled";
+    return true;
+  });
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return format(date, 'MMM dd, yyyy');
+    } catch (error) {
+      return 'Invalid Date';
     }
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your bookings...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          View and manage your event registrations and resource bookings
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">My Bookings</h1>
+          <p className="mt-2 text-gray-600">View and manage your event registrations and resource bookings</p>
         </div>
-      )}
 
-      {bookings.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-            />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            You haven't made any bookings yet.
-          </p>
+        {/* Tabs */}
+        <div className="bg-white rounded-lg shadow mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex -mb-px">
+              {[
+                { id: "all", label: "All Bookings" },
+                { id: "events", label: "Events" },
+                { id: "resources", label: "Resources" },
+                { id: "active", label: "Active" },
+                { id: "cancelled", label: "Cancelled" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === tab.id
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
-      ) : (
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          <ul className="divide-y divide-gray-200">
-            {bookings.map((booking) => (
-              <li key={booking.id}>
-                <div className="px-4 py-4 sm:px-6 hover:bg-gray-50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-indigo-600 truncate">
-                          {booking.booking_type === 'event' ? '📅 Event Registration' : '🏢 Resource Booking'}
-                        </p>
-                        <div className="ml-2 flex-shrink-0 flex">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            booking.status === 'confirmed' 
-                              ? 'bg-green-100 text-green-800'
-                              : booking.status === 'pending'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}>
-                            {booking.status}
-                          </span>
-                        </div>
+
+        {/* Bookings List */}
+        {filteredBookings.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <Calendar className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-4 text-lg font-medium text-gray-900">No bookings found</h3>
+            <p className="mt-2 text-gray-500">
+              {activeTab === "all" 
+                ? "You haven't made any bookings yet."
+                : `You don't have any ${activeTab} bookings.`}
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredBookings.map((booking) => {
+              const isEvent = booking.booking_type === "event";
+              const details = isEvent 
+                ? getEventDetails(booking.event_id)
+                : getResourceDetails(booking.resource_id);
+
+              return (
+                <div
+                  key={booking.id}
+                  className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow"
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center">
+                        {isEvent ? (
+                          <Calendar className="h-5 w-5 text-blue-600 mr-2" />
+                        ) : (
+                          <Package className="h-5 w-5 text-green-600 mr-2" />
+                        )}
+                        <span className="text-sm font-medium text-gray-500">
+                          {isEvent ? "Event" : "Resource"}
+                        </span>
                       </div>
-                      
-                      <div className="mt-2 sm:flex sm:justify-between">
-                        <div className="sm:flex">
-                          <p className="flex items-center text-sm text-gray-500">
-                            <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            {booking.date ? new Date(booking.date).toLocaleDateString() : 'No date'}
-                          </p>
-                          <p className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0 sm:ml-6">
-                            <svg className="flex-shrink-0 mr-1.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {booking.start_time && `${booking.start_time}`}
-                            {booking.end_time && ` - ${booking.end_time}`}
-                          </p>
-                        </div>
-                      </div>
-
-                      {booking.purpose && (
-                        <p className="mt-2 text-sm text-gray-600">
-                          Purpose: {booking.purpose}
-                        </p>
-                      )}
-
-                      {booking.notes && (
-                        <p className="mt-1 text-sm text-gray-500">
-                          Notes: {booking.notes}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="ml-4 flex-shrink-0">
-                      <button
-                        onClick={() => handleCancelBooking(booking.id)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                      <span
+                        className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                          booking.status === "confirmed"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
                       >
-                        Cancel
-                      </button>
+                        {booking.status}
+                      </span>
                     </div>
+
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {details?.title || details?.name || "Unknown"}
+                    </h3>
+
+                    <div className="space-y-2 text-sm text-gray-600 mb-4">
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        {formatDate(booking.date)}
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-2" />
+                        {booking.start_time} - {booking.end_time}
+                      </div>
+                      {details?.location && (
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 mr-2" />
+                          {details.location}
+                        </div>
+                      )}
+                    </div>
+
+                    {booking.purpose && (
+                      <p className="text-sm text-gray-600 mb-4">
+                        <span className="font-medium">Purpose:</span> {booking.purpose}
+                      </p>
+                    )}
+
+                    {booking.status === "confirmed" && (
+                      <button
+                        onClick={() => cancelBookingMutation.mutate(booking)}
+                        disabled={cancelBookingMutation.isLoading}
+                        className="w-full flex items-center justify-center px-4 py-2 border border-red-300 text-red-700 rounded-md hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        {cancelBookingMutation.isLoading ? "Cancelling..." : "Cancel Booking"}
+                      </button>
+                    )}
                   </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
