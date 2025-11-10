@@ -1,265 +1,311 @@
-import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, MapPin } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday } from 'date-fns';
-import api from '../api/client';
+import { useState, useEffect } from "react";
+import { Calendar, Clock, MapPin, Package, Users } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, parseISO } from "date-fns";
 
 export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [user, setUser] = useState(null);
   const [events, setEvents] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch user data
   useEffect(() => {
-    loadData();
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      }
+    };
+    fetchUser();
   }, []);
 
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [eventsData, bookingsData] = await Promise.all([
-        api.entities.Event.list(),
-        api.entities.Booking.list()
-      ]);
+  // Fetch events
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        const response = await fetch('/api/events');
+        if (response.ok) {
+          const data = await response.json();
+          setEvents(data.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      }
+    };
+    fetchEvents();
+  }, []);
 
-      const eventsList = eventsData.data || eventsData || [];
-      const bookingsList = bookingsData.data || bookingsData || [];
-
-      setEvents(eventsList);
-      setBookings(bookingsList);
-    } catch (error) {
-      console.error('Error loading calendar data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ✅ FIX: Fetch user's bookings from /my-bookings endpoint
+  useEffect(() => {
+    const fetchBookings = async () => {
+      if (!user?.id) return;
+      
+      try {
+        setLoading(true);
+        const response = await fetch('/api/bookings/my-bookings', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBookings(data.data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch bookings:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBookings();
+  }, [user?.id]);
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  // Fill to complete weeks
-  const startDay = monthStart.getDay();
-  const endDay = monthEnd.getDay();
-  const prevMonthDays = Array(startDay).fill(null);
-  const nextMonthDays = Array(6 - endDay).fill(null);
-  const allDays = [...prevMonthDays, ...daysInMonth, ...nextMonthDays];
+  const previousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+  };
 
   const getEventsForDate = (date) => {
-    if (!date) return [];
     return events.filter(event => {
       if (!event.date) return false;
       try {
-        return isSameDay(new Date(event.date), date);
-      } catch (e) {
+        const eventDate = parseISO(event.date);
+        return isSameDay(eventDate, date);
+      } catch {
         return false;
       }
     });
   };
 
   const getBookingsForDate = (date) => {
-    if (!date) return [];
     return bookings.filter(booking => {
       if (!booking.date) return false;
       try {
-        return isSameDay(new Date(booking.date), date);
-      } catch (e) {
+        const bookingDate = parseISO(booking.date);
+        return isSameDay(bookingDate, date);
+      } catch {
         return false;
       }
     });
   };
 
-  const selectedDateEvents = getEventsForDate(selectedDate);
-  const selectedDateBookings = getBookingsForDate(selectedDate);
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return format(date, 'MMM dd, yyyy');
+    } catch (error) {
+      return 'Invalid Date';
+    }
+  };
+
+  const selectedDateEvents = selectedDate ? getEventsForDate(selectedDate) : [];
+  const selectedDateBookings = selectedDate ? getBookingsForDate(selectedDate) : [];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading calendar...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Calendar</h1>
-          <p className="text-gray-600">View all events and bookings in calendar format</p>
+          <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
+          <p className="mt-2 text-gray-600">View your events and bookings in calendar format</p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid gap-8 lg:grid-cols-3">
           {/* Calendar */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              {/* Calendar Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
+          <div className="lg:col-span-2 bg-white rounded-lg shadow">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">
                   {format(currentDate, 'MMMM yyyy')}
                 </h2>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                    onClick={previousMonth}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                   >
-                    <ChevronLeft className="w-5 h-5" />
+                    Previous
                   </button>
                   <button
-                    onClick={() => setCurrentDate(new Date())}
-                    className="px-4 py-2 rounded-lg font-medium hover:bg-gray-100 transition-colors"
+                    onClick={nextMonth}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
                   >
-                    Today
-                  </button>
-                  <button
-                    onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5" />
+                    Next
                   </button>
                 </div>
               </div>
+            </div>
 
-              {/* Week Days */}
+            <div className="p-6">
+              {/* Weekday headers */}
               <div className="grid grid-cols-7 gap-2 mb-2">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center font-medium text-gray-600 text-sm py-2">
+                  <div key={day} className="text-center text-sm font-semibold text-gray-600 py-2">
                     {day}
                   </div>
                 ))}
               </div>
 
-              {/* Calendar Days */}
+              {/* Calendar days */}
               <div className="grid grid-cols-7 gap-2">
-                {allDays.map((day, index) => {
-                  const dayEvents = day ? getEventsForDate(day) : [];
-                  const dayBookings = day ? getBookingsForDate(day) : [];
-                  const hasActivity = dayEvents.length > 0 || dayBookings.length > 0;
-                  const isSelected = day && isSameDay(day, selectedDate);
-                  const isCurrentDay = day && isToday(day);
+                {daysInMonth.map((day, index) => {
+                  const dayEvents = getEventsForDate(day);
+                  const dayBookings = getBookingsForDate(day);
+                  const hasItems = dayEvents.length > 0 || dayBookings.length > 0;
+                  const isSelected = selectedDate && isSameDay(day, selectedDate);
+                  const isToday = isSameDay(day, new Date());
 
                   return (
                     <button
                       key={index}
-                      onClick={() => day && setSelectedDate(day)}
-                      disabled={!day || !isSameMonth(day, currentDate)}
-                      className={`aspect-square p-2 rounded-lg transition-all relative ${
-                        !day || !isSameMonth(day, currentDate)
-                          ? 'text-gray-300 cursor-default'
-                          : isSelected
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : isCurrentDay
-                          ? 'bg-blue-50 text-blue-600 font-bold'
-                          : 'hover:bg-gray-100'
-                      }`}
+                      onClick={() => setSelectedDate(day)}
+                      className={`
+                        min-h-[80px] p-2 border rounded-lg text-left transition-all
+                        ${!isSameMonth(day, currentDate) ? 'bg-gray-50 text-gray-400' : 'bg-white'}
+                        ${isSelected ? 'ring-2 ring-blue-500 border-blue-500' : 'border-gray-200'}
+                        ${isToday ? 'bg-blue-50' : ''}
+                        ${hasItems ? 'hover:shadow-md' : 'hover:border-gray-300'}
+                      `}
                     >
-                      {day && (
-                        <>
-                          <span className="text-sm">{format(day, 'd')}</span>
-                          {hasActivity && (
-                            <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2 flex gap-1">
-                              {dayEvents.length > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                              )}
-                              {dayBookings.length > 0 && (
-                                <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                              )}
+                      <div className={`text-sm font-semibold mb-1 ${isToday ? 'text-blue-600' : ''}`}>
+                        {format(day, 'd')}
+                      </div>
+                      {hasItems && (
+                        <div className="space-y-1">
+                          {dayEvents.length > 0 && (
+                            <div className="text-xs bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                              {dayEvents.length} event{dayEvents.length > 1 ? 's' : ''}
                             </div>
                           )}
-                        </>
+                          {dayBookings.length > 0 && (
+                            <div className="text-xs bg-green-100 text-green-800 px-1 py-0.5 rounded">
+                              {dayBookings.length} booking{dayBookings.length > 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </button>
                   );
                 })}
               </div>
-
-              {/* Legend */}
-              <div className="flex items-center gap-6 mt-6 pt-6 border-t border-gray-200">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-sm text-gray-600">Events</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-gray-600">Bookings</span>
-                </div>
-              </div>
             </div>
           </div>
 
           {/* Selected Date Details */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">
-                {format(selectedDate, 'MMMM d, yyyy')}
-              </h3>
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">
+                {selectedDate ? format(selectedDate, 'MMM dd, yyyy') : 'Select a date'}
+              </h2>
+            </div>
 
-              {/* Events */}
-              {selectedDateEvents.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-blue-600" />
-                    Events ({selectedDateEvents.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {selectedDateEvents.map(event => (
-                      <div key={event.id} className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                        <p className="font-medium text-gray-900 mb-1">{event.title}</p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{event.start_time} - {event.end_time}</span>
-                        </div>
-                        {event.location && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <MapPin className="w-3 h-3" />
-                            <span>{event.location}</span>
+            <div className="p-6">
+              {!selectedDate ? (
+                <p className="text-gray-500 text-center py-8">Click on a date to view details</p>
+              ) : (
+                <div className="space-y-6">
+                  {/* Events */}
+                  {selectedDateEvents.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                        <Calendar className="h-4 w-4 mr-2 text-blue-600" />
+                        Events
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedDateEvents.map(event => (
+                          <div key={event.id} className="p-3 bg-blue-50 rounded-lg">
+                            <h4 className="font-medium text-gray-900">{event.title}</h4>
+                            <div className="mt-2 space-y-1 text-sm text-gray-600">
+                              <div className="flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {event.start_time} - {event.end_time}
+                              </div>
+                              {event.location && (
+                                <div className="flex items-center">
+                                  <MapPin className="h-3 w-3 mr-1" />
+                                  {event.location}
+                                </div>
+                              )}
+                              <div className="flex items-center">
+                                <Users className="h-3 w-3 mr-1" />
+                                {event.registered_count || 0} / {event.capacity}
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {/* Bookings */}
-              {selectedDateBookings.length > 0 && (
-                <div>
-                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-green-600" />
-                    Bookings ({selectedDateBookings.length})
-                  </h4>
-                  <div className="space-y-3">
-                    {selectedDateBookings.map(booking => (
-                      <div key={booking.id} className="p-3 rounded-lg bg-green-50 border border-green-200">
-                        <p className="font-medium text-gray-900 mb-1">
-                          {booking.booking_type === 'event' ? 'Event Booking' : 'Resource Booking'}
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                          <Clock className="w-3 h-3" />
-                          <span>{booking.start_time} - {booking.end_time}</span>
-                        </div>
-                        {booking.purpose && (
-                          <p className="text-sm text-gray-600">{booking.purpose}</p>
-                        )}
-                        <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
-                          booking.status === 'confirmed' 
-                            ? 'bg-green-100 text-green-800'
-                            : booking.status === 'pending'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {booking.status}
-                        </span>
+                  {/* Bookings */}
+                  {selectedDateBookings.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-3 flex items-center">
+                        <Package className="h-4 w-4 mr-2 text-green-600" />
+                        My Bookings
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedDateBookings.map(booking => (
+                          <div key={booking.id} className="p-3 bg-green-50 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-medium text-gray-500">
+                                {booking.booking_type}
+                              </span>
+                              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
+                                booking.status === 'confirmed' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}>
+                                {booking.status}
+                              </span>
+                            </div>
+                            <div className="space-y-1 text-sm text-gray-600">
+                              <div className="flex items-center">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {booking.start_time} - {booking.end_time}
+                              </div>
+                              {booking.purpose && (
+                                <p className="text-xs">{booking.purpose}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                  )}
 
-              {/* No Activity */}
-              {selectedDateEvents.length === 0 && selectedDateBookings.length === 0 && (
-                <div className="text-center py-8">
-                  <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No events or bookings on this date</p>
+                  {selectedDateEvents.length === 0 && selectedDateBookings.length === 0 && (
+                    <p className="text-gray-500 text-center py-8">No events or bookings on this date</p>
+                  )}
                 </div>
               )}
             </div>
